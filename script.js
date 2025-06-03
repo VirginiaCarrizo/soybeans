@@ -1,0 +1,74 @@
+const video = document.getElementById('video');
+const foto = document.getElementById('foto');
+const boton = document.getElementById('botonAccion');
+const canvas = document.getElementById('canvas');
+
+let streamActual = null;
+
+async function iniciarCamaraTrasera() {
+  try {
+    // Intentamos con exact:"environment"
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { exact: "environment" } }
+    });
+    video.srcObject = stream;
+    streamActual = stream;
+  } catch (e) {
+    console.warn('Fallo exact; probamos facingMode sin exact…', e);
+    try {
+      const stream2 = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }
+      });
+      video.srcObject = stream2;
+      streamActual = stream2;
+    } catch (err) {
+      alert('No se pudo acceder a la cámara trasera: ' + err.message);
+    }
+  }
+}
+
+function detenerCamara() {
+  if (streamActual) {
+    streamActual.getTracks().forEach(track => track.stop());
+    streamActual = null;
+  }
+  video.srcObject = null;
+}
+
+boton.addEventListener('click', async () => {
+  if (boton.textContent === 'Capturar') {
+    // 1) Dibujar el frame actual sobre el canvas
+    const ctx = canvas.getContext('2d');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // 2) Obtener dataURL de la imagen
+    const dataURL = canvas.toDataURL('image/png');
+
+    // 3) Ocultar el video y mostrar el <img> con la foto
+    video.style.display = 'none';
+    foto.src = dataURL;
+    foto.style.display = 'block';
+
+    // 4) Detener la cámara para liberar sensor
+    detenerCamara();
+
+    // 5) Cambiar texto del botón a “Tomar otra”
+    boton.textContent = 'Tomar otra';
+  } else {
+    // Si el botón estaba en “Tomar otra”:
+    // 1) Ocultar la foto y volver a mostrar el video
+    foto.style.display = 'none';
+    video.style.display = 'block';
+
+    // 2) Reiniciar la cámara trasera
+    await iniciarCamaraTrasera();
+
+    // 3) Cambiar texto del botón a “Capturar”
+    boton.textContent = 'Capturar';
+  }
+});
+
+// Al cargar la página, arrancamos la cámara trasera
+iniciarCamaraTrasera();
