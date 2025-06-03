@@ -12,6 +12,8 @@ let streamActual = null;
 // Credenciales Roboflow
 const ROBOFLOW_API_KEY = "BB3sh1D4ta8L9zosEHdl";
 const MODEL_ENDPOINT = "https://detect.roboflow.com/beancount/1";
+const CONF_THRESHOLD = 0.5;   // mínima confianza (50%)
+const OVERLAP_THRESHOLD = 0.5; // NMS: máximo 30% de solape
 
 // ------------------------------
 // Iniciar cámara trasera
@@ -83,34 +85,37 @@ function dibujarPredicciones(predicciones) {
 // Enviar imagen capturada a Roboflow y procesar respuesta
 // ------------------------------
 async function enviarARoboflow(dataURL) {
-  // 1) Convertir dataURL a Blob
-  const blob = await (await fetch(dataURL)).blob();
-
-  // 2) Empaquetar en FormData
-  const formData = new FormData();
-  formData.append("file", blob, "soybean.png");
-
-  try {
-    // 3) Llamada POST a Roboflow Detection API 
-    const response = await fetch(
-      `${MODEL_ENDPOINT}?api_key=${ROBOFLOW_API_KEY}`, 
-      {
+    // 1) Convertir dataURL a Blob
+    const blob = await (await fetch(dataURL)).blob();
+    // 2) Empaquetar en FormData
+    const formData = new FormData();
+    formData.append("file", blob, "soybean.png");
+  
+    // 3) Construir la URL con api_key + confidence + overlap
+    const url = `${MODEL_ENDPOINT}`
+              + `?api_key=${ROBOFLOW_API_KEY}`
+              + `&confidence=${CONF_THRESHOLD}`
+              + `&overlap=${OVERLAP_THRESHOLD}`;
+  
+    try {
+      // 4) Hacer POST con los thresholds
+      const response = await fetch(url, {
         method: "POST",
         body: formData
+      });
+      if (!response.ok) {
+        throw new Error(`Error en Roboflow: ${response.status} ${response.statusText}`);
       }
-    );
-    if (!response.ok) {
-      throw new Error(`Error en Roboflow: ${response.status} ${response.statusText}`);
+      const data = await response.json();
+      // 5) Dibujar predicciones con 'data.predictions'
+      dibujarPredicciones(data.predictions);
+    } catch (err) {
+      // maneja errores
+      ctx.fillStyle = 'red';
+      ctx.fillText("Error en inferencia", 10, 20);
+      console.error("Error al invocar Roboflow:", err);
     }
-    const data = await response.json();
-    // 4) Dibujar cajas y etiquetas sobre la imagen en canvas
-    dibujarPredicciones(data.predictions);
-  } catch (err) {
-    console.error("Error al invocar Roboflow:", err);
-    ctx.fillStyle = 'red';
-    ctx.fillText("Error en inferencia", 10, 20);
   }
-}
 
 // ------------------------------
 // Manejador del botón
