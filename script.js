@@ -1,31 +1,31 @@
-// Seleccionamos cada elemento del DOM
+// Elementos del DOM
 const video = document.getElementById('video');
-const foto = document.getElementById('foto');
-const boton = document.getElementById('botonAccion');
 const canvas = document.getElementById('canvas');
-const resultado = document.getElementById('resultado');
+const boton = document.getElementById('botonAccion');
 
-// Variable para mantener la referencia del stream actual
+// Contexto 2D del canvas
+const ctx = canvas.getContext('2d');
+
+// Para almacenar el stream activo
 let streamActual = null;
 
-// Tus credenciales de Roboflow
+// Credenciales Roboflow
 const ROBOFLOW_API_KEY = "BB3sh1D4ta8L9zosEHdl";
-// Identificador del modelo en Roboflow Universe (“ddd-aiw7a/beancount/1”)
 const MODEL_ENDPOINT = "https://detect.roboflow.com/beancount/1";
 
-// ======================
-// Función para iniciar la cámara trasera
-// ======================
+// ------------------------------
+// Iniciar cámara trasera
+// ------------------------------
 async function iniciarCamaraTrasera() {
   try {
-    // Intentamos primero con facingMode exacto
+    // Intento con facingMode exacto
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { exact: "environment" } }
     });
     video.srcObject = stream;
     streamActual = stream;
   } catch (e) {
-    console.warn('Fallo exact:"environment"; probamos sin exact…', e);
+    console.warn('No se pudo usar exact:"environment", probamos sin exact…', e);
     try {
       const stream2 = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" }
@@ -38,9 +38,9 @@ async function iniciarCamaraTrasera() {
   }
 }
 
-// ======================
-// Función para detener la cámara (liberar sensor)
-// ======================
+// ------------------------------
+// Detener cámara
+// ------------------------------
 function detenerCamara() {
   if (streamActual) {
     streamActual.getTracks().forEach(track => track.stop());
@@ -49,19 +49,49 @@ function detenerCamara() {
   video.srcObject = null;
 }
 
-// ======================
-// Función que envía la imagen a Roboflow y muestra la respuesta
-// ======================
+// ------------------------------
+// Dibujar predicciones sobre el canvas
+// ------------------------------
+function dibujarPredicciones(predicciones) {
+  // Asumimos que el canvas ya tiene la imagen capturada
+  // Configuramos estilos para rectángulos y texto
+  ctx.strokeStyle = 'red';
+  ctx.lineWidth = 2;
+  ctx.font = '16px sans-serif';
+  ctx.fillStyle = 'red';
+
+  predicciones.forEach(pred => {
+    // Roboflow usa x,y como centro del box, así que convertimos a esquina superior
+    const cx = pred.x;
+    const cy = pred.y;
+    const w = pred.width;
+    const h = pred.height;
+    const x0 = cx - w / 2;
+    const y0 = cy - h / 2;
+
+    // Dibujar rectángulo
+    ctx.strokeRect(x0, y0, w, h);
+
+    // Preparar texto con clase y confiabilidad
+    const etiqueta = `${pred.class} (${(pred.confidence).toFixed(2)})`;
+    // Dibujamos el texto justo encima del rectángulo
+    ctx.fillText(etiqueta, x0 + 4, y0 + 16);
+  });
+}
+
+// ------------------------------
+// Enviar imagen capturada a Roboflow y procesar respuesta
+// ------------------------------
 async function enviarARoboflow(dataURL) {
-  // Convertimos el dataURL a Blob
+  // 1) Convertir dataURL a Blob
   const blob = await (await fetch(dataURL)).blob();
 
-  // Preparamos FormData con la imagen
+  // 2) Empaquetar en FormData
   const formData = new FormData();
   formData.append("file", blob, "soybean.png");
 
   try {
-    // Hacemos POST al endpoint de Roboflow (HTTP Inference API) :contentReference[oaicite:0]{index=0}
+    // 3) Llamada POST a Roboflow Detection API 
     const response = await fetch(
       `${MODEL_ENDPOINT}?api_key=${ROBOFLOW_API_KEY}`, 
       {
@@ -73,51 +103,61 @@ async function enviarARoboflow(dataURL) {
       throw new Error(`Error en Roboflow: ${response.status} ${response.statusText}`);
     }
     const data = await response.json();
-    // Mostramos el JSON en el <pre>
-    resultado.textContent = JSON.stringify(data, null, 2);
+    // 4) Dibujar cajas y etiquetas sobre la imagen en canvas
+    dibujarPredicciones(data.predictions);
   } catch (err) {
-    resultado.textContent = "Error al invocar Roboflow:\n" + err.message;
+    console.error("Error al invocar Roboflow:", err);
+    ctx.fillStyle = 'red';
+    ctx.fillText("Error en inferencia", 10, 20);
   }
 }
 
-// ======================
-// Evento al hacer click en el botón
-// ======================
+// ------------------------------
+// Manejador del botón
+// ------------------------------
 boton.addEventListener('click', async () => {
   if (boton.textContent === 'Capturar') {
-    // —————— Etapa 1: Capturar y mostrar la foto ——————
-    // 1) Dibujar el frame del video en el canvas
-    const ctx = canvas.getContext('2d');
+    // —— Etapa 1: capturar el frame en el canvas ——
+    // Ajustamos tamaño del canvas al video real
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
+    // Dibujamos el frame actual del video en el canvas
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // 2) Convertir a dataURL (PNG)
+    // Convertimos a dataURL
     const dataURL = canvas.toDataURL('image/png');
 
-    // 3) Ocultar el <video> y mostrar el <img> con la foto capturada
-    video.style.display = 'none';
-    foto.src = dataURL;
-    foto.style.display = 'block';
-
-    // 4) Detener la cámara para liberar la lente
+    // Detenemos la cámara
     detenerCamara();
 
-    // 5) Cambiar texto del botón a “Tomar otra”
+    // Mostramos el canvas y ocultamos el video
+    video.style.display = 'none';
+    canvas.style.display = 'block';
+
+    // Cambiamos el texto del botón
     boton.textContent = 'Tomar otra';
 
-    // —————— Etapa 2: Enviar la imagen a Roboflow ——————
-    resultado.textContent = "Enviando a Roboflow…";
+    // —— Etapa 2: enviar a Roboflow —— 
+    // (dibujaremos sobre el mismo canvas donde ya está la foto)
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, 150, 24);
+    ctx.fillStyle = 'black';
+    ctx.fillText("Cargando...", 8, 16);
     await enviarARoboflow(dataURL);
   } else {
-    // —————— Etapa “Tomar otra”: volver al preview de cámara ——————
-    foto.style.display = 'none';
-    resultado.textContent = "";
-    video.style.display = 'block';
+    // —— Etapa “Tomar otra”: volver al preview —— 
+    // Ocultamos el canvas y borramos su contenido
+    canvas.style.display = 'none';
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Reiniciamos la cámara
     await iniciarCamaraTrasera();
+    video.style.display = 'block';
+
+    // Restauramos texto del botón
     boton.textContent = 'Capturar';
   }
 });
 
-// Arrancamos la cámara trasera al cargar la página
+// Arrancar cámara al cargar
 iniciarCamaraTrasera();

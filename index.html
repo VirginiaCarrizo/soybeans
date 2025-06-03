@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SoybeanSeed – Inference Roboflow</title>
-  <!-- Enlazamos el CSS separado -->
+  <title>SoybeanSeed – Detección con Roboflow</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -13,19 +12,11 @@
   <!-- Preview de la cámara -->
   <video id="video" autoplay playsinline></video>
 
-  <!-- Aquí mostraremos la foto una vez tomada -->
-  <img id="foto" style="display: none;" />
-
-  <!-- Botón que alterna entre capturar / tomar otra -->
-  <button id="botonAccion">Capturar</button>
-
-  <!-- Elemento <canvas> oculto para capturar el fotograma -->
+  <!-- Canvas donde dibujaremos la imagen + rectángulos -->
   <canvas id="canvas" style="display: none;"></canvas>
 
-  <!-- Zona donde mostraremos el resultado de Roboflow -->
-  <pre id="resultado" style="width: 90%; max-width: 400px; margin-top: 20px; background: #f4f4f4; padding: 10px; border: 1px solid #ccc; white-space: pre-wrap;"></pre>
+  <button id="botonAccion">Capturar</button>
 
-  <!-- Enlazamos el JavaScript al final para que el DOM ya esté cargado -->
   <script src="script.js"></script>
 </body>
 </html>
