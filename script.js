@@ -16,7 +16,7 @@ const ROBOFLOW_API_KEY  = "BB3sh1D4ta8L9zosEHdl";
 const MODEL_ENDPOINT    = "https://detect.roboflow.com/beancount/1";
 
 // Umbrales recomendados (los puedes ajustar según tu modelo)
-const CONF_THRESHOLD    = 0.5;   // Ejemplo: 0.5
+const CONF_THRESHOLD    = 0.8;   // Ejemplo: 0.5
 const OVERLAP_THRESHOLD = 0.2;   // Ejemplo: 0.3
 
 // Tamaño fijo 640×640 (precisamente como “Resize: Stretch to 640×640” en tu entrenamiento)
