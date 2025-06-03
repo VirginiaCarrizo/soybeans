@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mi Web Cámara</title>
+  <title>SoybeanSeed</title>
   <style>
     body { margin:0; display:flex; flex-direction:column; align-items:center; }
     video { width:100%; max-width:400px; border:1px solid #ccc; margin-top:20px; }
@@ -11,22 +11,37 @@
   </style>
 </head>
 <body>
-  <h1>Web Cámara en Glitch</h1>
+  <h1>SoybeanSeed</h1>
   <video id="video" autoplay playsinline></video>
-  <button id="tomarFoto">Tomar foto</button>
+  <button id="tomarFoto">Capturar</button>
   <canvas id="canvas" style="display:none;"></canvas>
   <script>
     const video = document.getElementById('video');
     const boton = document.getElementById('tomarFoto');
     const canvas = document.getElementById('canvas');
-    async function iniciarCamara() {
+
+    async function iniciarCamaraTrasera() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        // Solicita específicamente la cámara trasera ("environment")
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { exact: "environment" } }
+        });
         video.srcObject = stream;
       } catch (e) {
-        alert('No se pudo acceder a la cámara: ' + e.message);
+        // Si “exact” falla (algunos navegadores/devices no reconocen)
+        console.warn('No se pudo usar exact:"environment", intentamos modo recomendado…', e);
+        try {
+          // Intento “facingMode: environment” (sin exact)
+          const stream2 = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" }
+          });
+          video.srcObject = stream2;
+        } catch (err) {
+          alert('No se pudo acceder a la cámara trasera: ' + err.message);
+        }
       }
     }
+
     boton.addEventListener('click', () => {
       const ctx = canvas.getContext('2d');
       canvas.width = video.videoWidth;
@@ -35,7 +50,8 @@
       const dataURL = canvas.toDataURL('image/png');
       window.open(dataURL);
     });
-    iniciarCamara();
+
+    iniciarCamaraTrasera();
   </script>
 </body>
 </html>
