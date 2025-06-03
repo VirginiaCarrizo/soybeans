@@ -5,33 +5,54 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SoybeanSeed</title>
   <style>
-    body { margin:0; display:flex; flex-direction:column; align-items:center; }
-    video { width:100%; max-width:400px; border:1px solid #ccc; margin-top:20px; }
-    button { margin:20px; padding:10px 20px; font-size:16px; }
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    video,
+    img {
+      width: 100%;
+      max-width: 400px;
+      border: 1px solid #ccc;
+      margin-top: 20px;
+    }
+    button {
+      margin: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
   <h1>SoybeanSeed</h1>
+
+  <!-- Preview de la cámara -->
   <video id="video" autoplay playsinline></video>
+
+  <!-- Aquí mostraremos la foto una vez tomada -->
+  <img id="foto" style="display: none;" />
+
   <button id="tomarFoto">Capturar</button>
-  <canvas id="canvas" style="display:none;"></canvas>
+  <canvas id="canvas" style="display: none;"></canvas>
+
   <script>
     const video = document.getElementById('video');
+    const foto = document.getElementById('foto');
     const boton = document.getElementById('tomarFoto');
     const canvas = document.getElementById('canvas');
 
     async function iniciarCamaraTrasera() {
       try {
-        // Solicita específicamente la cámara trasera ("environment")
+        // Intentamos con exact:"environment"
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { exact: "environment" } }
         });
         video.srcObject = stream;
       } catch (e) {
-        // Si “exact” falla (algunos navegadores/devices no reconocen)
-        console.warn('No se pudo usar exact:"environment", intentamos modo recomendado…', e);
+        console.warn('Fallo exact; probamos facingMode sin exact…', e);
         try {
-          // Intento “facingMode: environment” (sin exact)
           const stream2 = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: "environment" }
           });
@@ -43,12 +64,24 @@
     }
 
     boton.addEventListener('click', () => {
+      // 1) Dibujar el frame actual sobre el canvas
       const ctx = canvas.getContext('2d');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // 2) Obtener dataURL de la imagen
       const dataURL = canvas.toDataURL('image/png');
-      window.open(dataURL);
+
+      // 3) Ocultar el video y mostrar el <img> con la foto
+      video.style.display = 'none';
+      foto.src = dataURL;
+      foto.style.display = 'block';
+
+      // (Opcional) Si no quieres seguir enviando datos de la cámara,
+      // puedes detener el stream:
+      const tracks = video.srcObject.getTracks();
+      tracks.forEach(track => track.stop());
     });
 
     iniciarCamaraTrasera();
