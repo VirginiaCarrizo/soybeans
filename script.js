@@ -12,8 +12,8 @@ let streamActual = null;
 // Credenciales Roboflow
 const ROBOFLOW_API_KEY = "BB3sh1D4ta8L9zosEHdl";
 const MODEL_ENDPOINT = "https://detect.roboflow.com/beancount/1";
-const CONF_THRESHOLD = 0.5;   // mínima confianza (50%)
-const OVERLAP_THRESHOLD = 0.5; // NMS: máximo 30% de solape
+const CONF_THRESHOLD = 0.6;   // mínima confianza (50%)
+const OVERLAP_THRESHOLD = 0.35; // NMS: máximo 30% de solape
 
 // ------------------------------
 // Iniciar cámara trasera
