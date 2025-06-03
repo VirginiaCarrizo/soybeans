@@ -3,16 +3,29 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SoybeanSeed – Detección con Roboflow</title>
+  <title>SoybeanSeed – Detección 640×640</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <h1>SoybeanSeed</h1>
 
+  <!-- Controles para ajustar umbrales en tiempo real -->
+  <div id="controles">
+    <label for="sliderConf">
+      Confianza: <span id="labelConf">0.50</span>
+    </label>
+    <input type="range" id="sliderConf" min="0" max="1" step="0.01" value="0.50" />
+
+    <label for="sliderOv">
+      Solape: <span id="labelOv">0.30</span>
+    </label>
+    <input type="range" id="sliderOv" min="0" max="1" step="0.01" value="0.30" />
+  </div>
+
   <!-- Preview de la cámara -->
   <video id="video" autoplay playsinline></video>
 
-  <!-- Canvas donde dibujaremos la imagen + rectángulos -->
+  <!-- Canvas donde dibujaremos la imagen redimensionada a 640×640 + rectángulos -->
   <canvas id="canvas" style="display: none;"></canvas>
 
   <button id="botonAccion">Capturar</button>
