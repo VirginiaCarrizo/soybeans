@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mi Web Cámara</title>
+  <style>
+    body { margin:0; display:flex; flex-direction:column; align-items:center; }
+    video { width:100%; max-width:400px; border:1px solid #ccc; margin-top:20px; }
+    button { margin:20px; padding:10px 20px; font-size:16px; }
+  </style>
+</head>
+<body>
+  <h1>Web Cámara en Glitch</h1>
+  <video id="video" autoplay playsinline></video>
+  <button id="tomarFoto">Tomar foto</button>
+  <canvas id="canvas" style="display:none;"></canvas>
+  <script>
+    const video = document.getElementById('video');
+    const boton = document.getElementById('tomarFoto');
+    const canvas = document.getElementById('canvas');
+    async function iniciarCamara() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+      } catch (e) {
+        alert('No se pudo acceder a la cámara: ' + e.message);
+      }
+    }
+    boton.addEventListener('click', () => {
+      const ctx = canvas.getContext('2d');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataURL = canvas.toDataURL('image/png');
+      window.open(dataURL);
+    });
+    iniciarCamara();
+  </script>
+</body>
+</html>
