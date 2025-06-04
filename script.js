@@ -21,14 +21,15 @@ let lastDataURL     = null;
 // ------------------------------
 const ROBOFLOW_API_KEY  = "BB3sh1D4ta8L9zosEHdl";
 const MODEL_ENDPOINT    = "https://detect.roboflow.com/beancount/1";
-const TARGET_SIZE       = 640;      // “Resize: Stretch to 640×640”
+const TARGET_SIZE       = 640;   // “Resize: Stretch to 640×640”
+const ROW_THRESHOLD_PX  = 20;    // Umbral de altura para agrupar en la misma fila
 
 // ------------------------------
 // Arrancar la cámara trasera
 // ------------------------------
 async function iniciarCamaraTrasera() {
   try {
-    // Intento con facingMode exacto
+    // Intentar con facingMode exacto
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { exact: "environment" } }
     });
@@ -60,10 +61,33 @@ function detenerCamara() {
 }
 
 // ------------------------------
+// Agrupar “boxes” en filas usando clustering vertical
+// ------------------------------
+function agruparFilas(boxes) {
+  const filas = [];
+  boxes.forEach(box => {
+    let colocado = false;
+    for (let fila of filas) {
+      // Calcular el cy promedio de la fila
+      const avgCy = fila.reduce((sum, b) => sum + b.cy, 0) / fila.length;
+      if (Math.abs(box.cy - avgCy) < ROW_THRESHOLD_PX) {
+        fila.push(box);
+        colocado = true;
+        break;
+      }
+    }
+    if (!colocado) {
+      filas.push([box]);
+    }
+  });
+  return filas;
+}
+
+// ------------------------------
 // Dibujar predicciones con numeración sobre el canvas
 // ------------------------------
 function dibujarPredicciones(predicciones) {
-  // Primero transformamos cada pred a un objeto con x0, y0, cx, cy, w, h
+  // --- Construir un array “boxes” con propiedades calculadas ---
   const boxes = predicciones.map(pred => {
     const cx = pred.x;
     const cy = pred.y;
@@ -74,28 +98,39 @@ function dibujarPredicciones(predicciones) {
     return { ...pred, x0, y0, cx, cy, w, h };
   });
 
-  // Ordenamos de arriba a abajo (por cy) y, dentro de la misma fila, de izquierda a derecha (por cx)
-  boxes.sort((a, b) => {
-    if (Math.abs(a.cy - b.cy) > 10) {
-      return a.cy - b.cy;
-    }
-    return a.cx - b.cx;
+  // --- Agrupar las cajas en filas ---
+  const filasAgrupadas = agruparFilas(boxes);
+
+  // --- Ordenar cada fila por el centro horizontal (cx) y
+  //     luego ordenar las filas completas por su altura media (cy promedio) ---
+  filasAgrupadas.forEach(fila => {
+    fila.sort((a, b) => a.cx - b.cx);
+  });
+  filasAgrupadas.sort((filaA, filaB) => {
+    const avgA = filaA.reduce((sum, b) => sum + b.cy, 0) / filaA.length;
+    const avgB = filaB.reduce((sum, b) => sum + b.cy, 0) / filaB.length;
+    return avgA - avgB;
   });
 
-  // Dibujamos cada caja en orden y asignamos ID incremental
-  boxes.forEach((box, idx) => {
-    const id = idx + 1;
-    // Rectángulo
-    ctx.strokeStyle = 'red';
-    ctx.lineWidth   = 2;
-    ctx.strokeRect(box.x0, box.y0, box.w, box.h);
+  // --- Aplanar las filas en un solo array, asignando ID incremental ---
+  let id = 1;
+  filasAgrupadas.forEach(fila => {
+    fila.forEach(box => {
+      // Dibujar el rectángulo
+      ctx.strokeStyle = 'red';
+      ctx.lineWidth   = 2;
+      ctx.strokeRect(box.x0, box.y0, box.w, box.h);
 
-    // Texto del ID: lo colocamos un poco arriba de la esquina superior-izquierda
-    ctx.font      = '16px sans-serif';
-    ctx.fillStyle = 'red';
-    const textX = box.x0 + 4;
-    const textY = box.y0 - 4 < 16 ? box.y0 + 16 : box.y0 - 4;
-    ctx.fillText(id.toString(), textX, textY);
+      // Preparar posición del texto (ID)
+      ctx.font = '16px sans-serif';
+      ctx.fillStyle = 'red';
+      const textX = box.x0 + 4;
+      const textY = (box.y0 - 4 < 16) ? box.y0 + 16 : box.y0 - 4;
+
+      // Dibujar el ID
+      ctx.fillText(id.toString(), textX, textY);
+      id += 1;
+    });
   });
 }
 
@@ -103,29 +138,29 @@ function dibujarPredicciones(predicciones) {
 // Enviar la imagen 640×640 a Roboflow con thresholds actuales
 // ------------------------------
 async function enviarARoboflow(dataURL) {
-  // 1) Convertir dataURL a Blob
+  // Convertir dataURL a Blob
   const blob = await (await fetch(dataURL)).blob();
 
-  // 2) Empaquetar en FormData
+  // Empaquetar en FormData
   const formData = new FormData();
   formData.append("file", blob, "soybean.png");
 
-  // 3) Leer valores de los sliders en el momento
+  // Leer valores de los sliders
   let confValue = parseFloat(sliderConf.value);
   let ovValue   = parseFloat(sliderOv.value);
 
-  // 4) Clamp para garantizar rangos válidos [0,1]
+  // Clamp para garantizar [0,1]
   confValue = Math.min(Math.max(confValue, 0), 1);
   ovValue   = Math.min(Math.max(ovValue,   0), 1);
 
-  // 5) Construir URL con api_key, confidence y overlap
+  // Construir URL con api_key, confidence y overlap
   const url = `${MODEL_ENDPOINT}`
             + `?api_key=${ROBOFLOW_API_KEY}`
             + `&confidence=${confValue}`
             + `&overlap=${ovValue}`;
 
   try {
-    // 6) Llamar al endpoint de detección de Roboflow 
+    // Llamada POST a Roboflow Detection API 
     const response = await fetch(url, {
       method: "POST",
       body: formData
@@ -137,7 +172,7 @@ async function enviarARoboflow(dataURL) {
     }
     const data = await response.json();
 
-    // 7) Dibujar las cajas + IDs sobre la imagen en el canvas
+    // Dibujar cajas + numeración sobre la imagen en el canvas
     dibujarPredicciones(data.predictions);
   } catch (err) {
     console.error("Error en inferencia Roboflow:", err);
@@ -154,10 +189,10 @@ function reInfer() {
   const img = new Image();
   img.src = lastDataURL;
   img.onload = async () => {
-    // Limpiamos y dibujamos la imagen base 640×640
+    // Limpiar y dibujar la imagen base 640×640
     ctx.clearRect(0, 0, TARGET_SIZE, TARGET_SIZE);
     ctx.drawImage(img, 0, 0, TARGET_SIZE, TARGET_SIZE);
-    // Enviamos de nuevo a Roboflow con thresholds actualizados
+    // Enviar de nuevo a Roboflow con thresholds actualizados
     await enviarARoboflow(lastDataURL);
   };
 }
@@ -167,9 +202,7 @@ function reInfer() {
 // ------------------------------
 let debounceTimeout = null;
 
-// ------------------------------
-// Actualizar etiquetas de los sliders y re-inferir si hace falta (con debounce)
-// ------------------------------
+// Slider “confidence”
 sliderConf.addEventListener('input', () => {
   labelConf.textContent = parseFloat(sliderConf.value).toFixed(2);
   if (canvas.style.display === 'block' && lastDataURL) {
@@ -177,6 +210,8 @@ sliderConf.addEventListener('input', () => {
     debounceTimeout = setTimeout(reInfer, 200);
   }
 });
+
+// Slider “overlap”
 sliderOv.addEventListener('input', () => {
   labelOv.textContent = parseFloat(sliderOv.value).toFixed(2);
   if (canvas.style.display === 'block' && lastDataURL) {
@@ -194,7 +229,7 @@ boton.addEventListener('click', async () => {
     canvas.width  = TARGET_SIZE;
     canvas.height = TARGET_SIZE;
 
-    // Dibujamos el video completo “estirado” en el canvas 640×640
+    // Dibujar el video “estirado” en el canvas 640×640
     ctx.drawImage(
       video,
       0, 0, video.videoWidth, video.videoHeight,  // rect fuente
@@ -215,7 +250,7 @@ boton.addEventListener('click', async () => {
     // Mostrar el botón “Examinar”
     btnExaminar.style.display = 'inline-block';
 
-    // Pintamos un “Cargando…” previo
+    // Pintar un “Cargando…” previo
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, 150, 24);
     ctx.fillStyle = 'black';
