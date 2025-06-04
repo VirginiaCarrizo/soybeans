@@ -76,11 +76,9 @@ function dibujarPredicciones(predicciones) {
 
   // Ordenamos de arriba a abajo (por cy) y, dentro de la misma fila, de izquierda a derecha (por cx)
   boxes.sort((a, b) => {
-    // Comparamos centro Y
     if (Math.abs(a.cy - b.cy) > 10) {
       return a.cy - b.cy;
     }
-    // Si están casi a la misma altura (diferencia < 10 px), comparamos centro X
     return a.cx - b.cx;
   });
 
@@ -95,7 +93,6 @@ function dibujarPredicciones(predicciones) {
     // Texto del ID: lo colocamos un poco arriba de la esquina superior-izquierda
     ctx.font      = '16px sans-serif';
     ctx.fillStyle = 'red';
-    // Si y0 es muy pequeño, dibujamos dentro de la caja para que no se salga
     const textX = box.x0 + 4;
     const textY = box.y0 - 4 < 16 ? box.y0 + 16 : box.y0 - 4;
     ctx.fillText(id.toString(), textX, textY);
@@ -114,27 +111,33 @@ async function enviarARoboflow(dataURL) {
   formData.append("file", blob, "soybean.png");
 
   // 3) Leer valores de los sliders en el momento
-  const confValue = parseFloat(sliderConf.value);
-  const ovValue   = parseFloat(sliderOv.value);
+  let confValue = parseFloat(sliderConf.value);
+  let ovValue   = parseFloat(sliderOv.value);
 
-  // 4) Construir URL con api_key, confidence y overlap
+  // 4) Clamp para garantizar rangos válidos [0,1]
+  confValue = Math.min(Math.max(confValue, 0), 1);
+  ovValue   = Math.min(Math.max(ovValue,   0), 1);
+
+  // 5) Construir URL con api_key, confidence y overlap
   const url = `${MODEL_ENDPOINT}`
             + `?api_key=${ROBOFLOW_API_KEY}`
             + `&confidence=${confValue}`
             + `&overlap=${ovValue}`;
 
   try {
-    // 5) Llamar al endpoint de detección de Roboflow 
+    // 6) Llamar al endpoint de detección de Roboflow 
     const response = await fetch(url, {
       method: "POST",
       body: formData
     });
     if (!response.ok) {
-      throw new Error(`Error en Roboflow: ${response.status} ${response.statusText}`);
+      const errorTexto = await response.text();
+      console.error(`Roboflow devuelto ${response.status}: ${errorTexto}`);
+      throw new Error(`Error ${response.status}`);
     }
     const data = await response.json();
 
-    // 6) Dibujar las cajas + IDs sobre la imagen en el canvas
+    // 7) Dibujar las cajas + IDs sobre la imagen en el canvas
     dibujarPredicciones(data.predictions);
   } catch (err) {
     console.error("Error en inferencia Roboflow:", err);
@@ -160,18 +163,25 @@ function reInfer() {
 }
 
 // ------------------------------
-// Actualizar etiquetas de los sliders y re-inferir si hace falta
+// Debounce: no ejecutar reInfer más de una vez cada 200 ms
+// ------------------------------
+let debounceTimeout = null;
+
+// ------------------------------
+// Actualizar etiquetas de los sliders y re-inferir si hace falta (con debounce)
 // ------------------------------
 sliderConf.addEventListener('input', () => {
   labelConf.textContent = parseFloat(sliderConf.value).toFixed(2);
   if (canvas.style.display === 'block' && lastDataURL) {
-    reInfer();
+    clearTimeout(debounceTimeout);
+    debounceTimeout = setTimeout(reInfer, 200);
   }
 });
 sliderOv.addEventListener('input', () => {
   labelOv.textContent = parseFloat(sliderOv.value).toFixed(2);
   if (canvas.style.display === 'block' && lastDataURL) {
-    reInfer();
+    clearTimeout(debounceTimeout);
+    debounceTimeout = setTimeout(reInfer, 200);
   }
 });
 
@@ -233,8 +243,6 @@ boton.addEventListener('click', async () => {
 // Listener para “Examinar” (por implementar)
 // ------------------------------
 btnExaminar.addEventListener('click', () => {
-  // Aquí podrías, por ejemplo, abrir un <input type="file"> para subir
-  // una imagen de la galería. Por ahora mostramos un alert de ejemplo:
   alert('Funcionalidad “Examinar” pendiente de implementar.');
 });
 
