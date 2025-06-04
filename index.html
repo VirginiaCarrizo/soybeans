@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SoybeanSeed – Detección 640×640</title>
+  <title>SoybeanSeed – Detección y Enumeración</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -25,10 +25,15 @@
   <!-- Preview de la cámara -->
   <video id="video" autoplay playsinline></video>
 
-  <!-- Canvas donde dibujaremos la imagen redimensionada a 640×640 + rectángulos -->
+  <!-- Canvas donde dibujaremos la imagen redimensionada a 640×640 + rectángulos y IDs -->
   <canvas id="canvas" style="display: none;"></canvas>
 
-  <button id="botonAccion">Capturar</button>
+  <!-- Botones de acción -->
+  <div id="botonera">
+    <button id="botonAccion">Capturar</button>
+    <!-- Este botón aparece sólo cuando el principal dice “Tomar otra” -->
+    <button id="btnExaminar" style="display: none;">Examinar</button>
+  </div>
 
   <script src="script.js"></script>
 </body>
