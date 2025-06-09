@@ -142,7 +142,7 @@ async function inferirConModeloLocal() {
 
   // 2) Ejecutar sesión ONNX
   const outputs = await session.run({ images: tensor });
-
+  console.log("Resultados de la inferencia:", outputs);
   // 3) Extraer los valores en orden (sin asumir nombres)
   const outVals = Object.values(outputs);
   if (outVals.length < 3) {
