@@ -35,7 +35,7 @@ export function agruparFilas(boxes) {
       return aAvg - bAvg;
     });
     let id = 1;
-    const { ctx } = require('../components/dom');
+    const { ctx } = require('../../docs/js/components/dom');
     filas.flat().forEach(b => {
       ctx.strokeStyle = 'red';
       ctx.lineWidth   = 2;

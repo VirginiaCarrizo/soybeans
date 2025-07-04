@@ -10,7 +10,7 @@ export async function inferirLocal(lastDataURL) {
   const session = getSession();
   if (!session || !lastDataURL) return;
 
-  const { canvas, ctx } = require('./dom');
+  const { canvas, ctx } = require('./dom.js');
   // 1) Leer píxeles del canvas
   const imgData = ctx.getImageData(0,0,TARGET_SIZE,TARGET_SIZE).data;
   const input   = new Float32Array(TARGET_SIZE*TARGET_SIZE*3);

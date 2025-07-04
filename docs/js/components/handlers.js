@@ -1,5 +1,5 @@
 import { inferirLocal } from './inference.js';
-import { fileInput, canvas, ctx, sliderConf, labelConf, sliderOv, labelOv, boton } from './dom.js';
+import { fileInput, canvas, ctx, sliderConf, labelConf, sliderOv, labelOv, boton } from '../../docs/js/components/dom.js';
 
 let lastDataURL = null;
 
