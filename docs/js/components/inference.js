@@ -1,32 +1,40 @@
-import { getSession, TARGET_SIZE } from './modelLoader.js';
-import { nonMaxSuppression } from './nms.js';
-import { dibujarPredicciones } from './grouping.js';
+import { canvas, ctx, TARGET_SIZE } from './dom.js';
+
+function dataURLtoBlob(dataurl) {
+  const [meta, b64] = dataurl.split(',');
+  const mime = meta.match(/:(.*?);/)[1];
+  const bin  = atob(b64);
+  let   len  = bin.length;
+  const arr  = new Uint8Array(len);
+  while (len--) arr[len] = bin.charCodeAt(len);
+  return new Blob([arr], { type: mime });
+}
 
 /**
- * Realiza inferencia ONNX y dibuja resultados.
- * @param {string} lastDataURL - Data URL de la imagen cargada
+ * Envia la imagen al backend y pinta la respuesta anotada.
  */
 export async function inferirLocal(lastDataURL) {
-  const session = getSession();
-  if (!session || !lastDataURL) return;
+  if (!lastDataURL) return;
 
-  const { canvas, ctx } = require('./dom.js');
-  // 1) Leer píxeles del canvas
-  const imgData = ctx.getImageData(0,0,TARGET_SIZE,TARGET_SIZE).data;
-  const input   = new Float32Array(TARGET_SIZE*TARGET_SIZE*3);
-  for (let i=0, j=0; i<imgData.length; i+=4, j+=3) {
-    input[j]   = imgData[i]   / 255;
-    input[j+1] = imgData[i+1] / 255;
-    input[j+2] = imgData[i+2] / 255;
+  const blob = dataURLtoBlob(lastDataURL);
+  const form = new FormData();
+  form.append('file', blob, 'input.jpg');
+
+  const res = await fetch('http://localhost:8000/predict', {
+    method: 'POST',
+    body: form
+  });
+  if (!res.ok) {
+    console.error('Error de inferencia:', res.statusText);
+    return;
   }
-  const tensor = new ort.Tensor('float32', input, [1,3,TARGET_SIZE,TARGET_SIZE]);
 
-  // 2) Ejecutar sesión ONNX
-  const outputs = await session.run({ images: tensor });
-
-  // 3) Procesar salidas y aplicar NMS
-  // ... lógica de parsing de tensor y umbrales ...
-
-  // 4) Dibujar predicciones
-  dibujarPredicciones(finalPreds);
+  const imgBlob = await res.blob();
+  const img     = new Image();
+  img.onload = () => {
+    canvas.width  = canvas.height = TARGET_SIZE;
+    ctx.clearRect(0,0,TARGET_SIZE,TARGET_SIZE);
+    ctx.drawImage(img, 0, 0, TARGET_SIZE, TARGET_SIZE);
+  };
+  img.src = URL.createObjectURL(imgBlob);
 }
