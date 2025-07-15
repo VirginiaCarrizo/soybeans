@@ -1,35 +1,30 @@
+import { video, canvas, ctx, boton, TARGET_SIZE } from './dom.js';
 import { inferirLocal } from './inference.js';
-import { fileInput, canvas, ctx, sliderConf, labelConf, sliderOv, labelOv, boton } from './dom.js';
 
-let lastDataURL = null;
+// 1) Pedir permiso y mostrar cámara
+async function initCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+    video.play();
+  } catch (err) {
+    console.error('No se pudo acceder a la cámara:', err);
+  }
+}
 
-fileInput.addEventListener('change', () => {
-  const file = fileInput.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    lastDataURL = reader.result;
-    const img = new Image();
-    img.src = lastDataURL;
-    img.onload = () => {
-      canvas.width = canvas.height = TARGET_SIZE;
-      ctx.drawImage(img, 0, 0, TARGET_SIZE, TARGET_SIZE);
-      inferirLocal(lastDataURL);
-    };
-  };
-  reader.readAsDataURL(file);
-});
+// 2) Capturar un frame y procesar
+function procesarFrame() {
+  // Ajustar canvas
+  canvas.width = canvas.height = TARGET_SIZE;
+  // Dibujar el frame actual del video
+  ctx.drawImage(video, 0, 0, TARGET_SIZE, TARGET_SIZE);
+  // Obtener DataURL y enviar a inferirLocal
+  const dataURL = canvas.toDataURL('image/jpeg');
+  inferirLocal(dataURL);
+}
 
-let tid;
-sliderConf.addEventListener('input', () => {
-  labelConf.textContent = parseFloat(sliderConf.value).toFixed(2);
-  clearTimeout(tid);
-  tid = setTimeout(() => inferirLocal(lastDataURL), 200);
-});
-sliderOv.addEventListener('input', () => {
-  labelOv.textContent = parseFloat(sliderOv.value).toFixed(2);
-  clearTimeout(tid);
-  tid = setTimeout(() => inferirLocal(lastDataURL), 200);
-});
+// Cuando se cargue el script arrancamos la cámara
+initCamera();
 
-boton.addEventListener('click', () => inferirLocal(lastDataURL));
+// Asociamos el botón
+boton.addEventListener('click', procesarFrame);
