@@ -17,6 +17,8 @@ export async function inferirLocal(lastDataURL) {
   if (!lastDataURL) return;
 
   const blob = dataURLtoBlob(lastDataURL);
+  console.log('[DEBUG] Enviando blob al servidor:', blob);
+  console.log('   size:', blob.size, 'type:', blob.type);
   const form = new FormData();
   form.append('file', blob, 'input.jpg');
 
