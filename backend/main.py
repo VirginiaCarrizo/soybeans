@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 import io
 import numpy as np
@@ -10,6 +11,16 @@ from ultralytics import YOLO
 import supervision as sv
 
 app = FastAPI()
+
+# --- CONFIGURA CORS ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],            # o pon aquí el origen de tu frontend, ej. ["http://localhost:5500"]
+    allow_credentials=True,
+    allow_methods=["*"],            # permite GET, POST, OPTIONS, etc.
+    allow_headers=["*"],            # permite Content-Type, Authorization, etc.
+)
+# -------------------------
 
 # 1. Apunta al nuevo checkpoint
 MODEL_PATH = r"D:\proyectos\soybeans\backend\models\best.pt"
