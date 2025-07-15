@@ -1,30 +1,33 @@
 import { video, canvas, ctx, boton, TARGET_SIZE } from './dom.js';
 import { inferirLocal } from './inference.js';
 
-// 1) Pedir permiso y mostrar cámara
 async function initCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     video.srcObject = stream;
-    video.play();
+    await video.play();
   } catch (err) {
     console.error('No se pudo acceder a la cámara:', err);
   }
 }
 
-// 2) Capturar un frame y procesar
 function procesarFrame() {
-  // Ajustar canvas
-  canvas.width = canvas.height = TARGET_SIZE;
-  // Dibujar el frame actual del video
-  ctx.drawImage(video, 0, 0, TARGET_SIZE, TARGET_SIZE);
-  // Obtener DataURL y enviar a inferirLocal
-  const dataURL = canvas.toDataURL('image/jpeg');
+  // 1. Creamos un canvas “offscreen” para capturar el frame
+  const off = document.createElement('canvas');
+  off.width = off.height = TARGET_SIZE;
+  const offCtx = off.getContext('2d');
+  offCtx.drawImage(video, 0, 0, TARGET_SIZE, TARGET_SIZE);
+
+  // 2. Sacamos el DataURL de ese offscreen
+  const dataURL = off.toDataURL('image/jpeg');
+
+  // 3. Enviamos al backend y dejamos que inferirLocal
+  //    limpie y pinte en el canvas visible SOLO la imagen anotada:
   inferirLocal(dataURL);
 }
 
-// Cuando se cargue el script arrancamos la cámara
+// arranca cámara al cargar
 initCamera();
 
-// Asociamos el botón
+// botón “Procesar” ahora sólo dispara la foto+inferencia
 boton.addEventListener('click', procesarFrame);
