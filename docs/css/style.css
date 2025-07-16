@@ -52,6 +52,8 @@ canvas {
   border: 1px solid #444;
   background-color: #eee;
   border-radius: 4px;
+  z-index: 10;              /* que esté por encima de video/canvas */
+  touch-action: manipulation;/* mejora la respuesta táctil */
 }
 
 #botonAccion:hover,
