@@ -3,11 +3,24 @@ import { inferirLocal } from './inference.js';
 
 async function initCamera() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    const constraints = {
+      video: {
+        // Fuerza la cámara trasera (“environment”)
+        facingMode: { exact: "environment" }
+        // Si exact falla en algún dispositivo, podrías usar:
+//      facingMode: { ideal: "environment" }
+      }
+    };
+
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
     await video.play();
   } catch (err) {
-    console.error('No se pudo acceder a la cámara:', err);
+    console.warn("No pude abrir la cámara trasera, usando la por defecto:", err);
+    // Fallback a la cámara por defecto si “environment” no está disponible
+    const fallback = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = fallback;
+    await video.play();
   }
 }
 
