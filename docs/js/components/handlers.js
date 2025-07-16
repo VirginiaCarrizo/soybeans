@@ -4,20 +4,13 @@ import { inferirLocal } from './inference.js';
 async function initCamera() {
   try {
     const constraints = {
-      video: {
-        // Fuerza la cámara trasera (“environment”)
-        facingMode: { exact: "environment" }
-        // Si exact falla en algún dispositivo, podrías usar:
-//      facingMode: { ideal: "environment" }
-      }
+      video: { facingMode: { exact: "environment" } }
     };
-
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
     await video.play();
   } catch (err) {
-    console.warn("No pude abrir la cámara trasera, usando la por defecto:", err);
-    // Fallback a la cámara por defecto si “environment” no está disponible
+    console.warn("No pude abrir trasera, usando por defecto:", err);
     const fallback = await navigator.mediaDevices.getUserMedia({ video: true });
     video.srcObject = fallback;
     await video.play();
@@ -25,22 +18,27 @@ async function initCamera() {
 }
 
 function procesarFrame() {
-  // 1. Creamos un canvas “offscreen” para capturar el frame
   const off = document.createElement('canvas');
   off.width = off.height = TARGET_SIZE;
   const offCtx = off.getContext('2d');
   offCtx.drawImage(video, 0, 0, TARGET_SIZE, TARGET_SIZE);
-
-  // 2. Sacamos el DataURL de ese offscreen
   const dataURL = off.toDataURL('image/jpeg');
-
-  // 3. Enviamos al backend y dejamos que inferirLocal
-  //    limpie y pinte en el canvas visible SOLO la imagen anotada:
   inferirLocal(dataURL);
 }
 
-// arranca cámara al cargar
+// Arranca la cámara al cargar la página
 initCamera();
 
-// botón “Procesar” ahora sólo dispara la foto+inferencia
+// Configura el botón de procesar
 boton.addEventListener('click', procesarFrame);
+
+// ————————
+// Aquí añades el listener para el <input type="file">
+const fileInput = document.getElementById('fileInput');
+fileInput.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => inferirLocal(reader.result);
+  reader.readAsDataURL(file);
+});
