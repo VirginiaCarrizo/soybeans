@@ -21,7 +21,7 @@ export async function inferirLocal(lastDataURL) {
   form.append('file', blob, 'input.jpg');
 
   try {
-    const res = await fetch('http://localhost:8000/predict', {
+    const res = await fetch('http://192.168.1.9:8000/predict', {
       method: 'POST',
       body: form
     });
