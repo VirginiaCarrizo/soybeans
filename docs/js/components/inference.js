@@ -11,7 +11,7 @@ function dataURLtoBlob(dataurl) {
   return new Blob([arr], { type: mime });
 }
 
-const API_BASE = ''; // si sirves tu API local con FastAPI+Uvicorn en mismo host, deja ''. 
+const API_BASE = 'http://localhost:8000'; // si sirves tu API local con FastAPI+Uvicorn en mismo host, deja ''. 
                    // Si la sirves en otro host/puerto, pon 'http://192.168.x.x:8000'
 
 export async function inferirLocal(dataURL) {
