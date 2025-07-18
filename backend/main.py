@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 import io
 import numpy as np
-
+import cv2
 #PARA CORRER LA APP NECESITO EN DOS TERMINALES DIFERENTES CORRER ESTAS DOS LINEAS:
 #python -m http.server 5500
 #uvicorn main:app --reload --host 0.0.0.0 --port 8000
