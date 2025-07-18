@@ -29,47 +29,53 @@ app.add_middleware(
 # 1. Apunta al nuevo checkpoint
 MODEL_PATH = r"D:\proyectos\soybeans\backend\models\best.pt"
 
-# 2. Carga el modelo YOLOv8
+# 2. Carga el modelo
 model = YOLO(MODEL_PATH)
 
-# 3. Extrae nombres de clase desde el propio modelo
-CLASS_NAMES = model.model.names  # es un dict {id: nombre}
+# 3. Nombres de clase
+CLASS_NAMES = model.model.names  # dict {id: nombre}
+
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    # 4. Lee imagen de la petición
+    # 4. Lee la imagen enviada
     data = await file.read()
-    img = Image.open(io.BytesIO(data)).convert("RGB")
-    img_np = np.array(img)
+    pil = Image.open(io.BytesIO(data)).convert("RGB")
+    img_np = np.array(pil)
 
-    # 5. Inferencia con YOLO
-    #    conf=0.5 para umbral de confianza
+    # 5. Inferencia
     results = model(img_np, conf=0.5)[0]
 
     # 6. Extrae cajas, clases y confianzas
-    boxes       = results.boxes.xyxy.cpu().numpy()      # [[x1,y1,x2,y2], ...]
-    confidences = results.boxes.conf.cpu().numpy()      # [0.87, 0.75, ...]
-    class_ids   = results.boxes.cls.cpu().numpy().astype(int)  # [0, 1, 2, ...]
+    boxes       = results.boxes.xyxy.cpu().numpy().astype(int)  # Nx4
+    confidences = results.boxes.conf.cpu().numpy()
+    class_ids   = results.boxes.cls.cpu().numpy().astype(int)
 
-    # 7. Convierte a Detections de supervision
-    detections = sv.Detections(
-        xyxy       = boxes,
-        confidence = confidences,
-        class_id   = class_ids
-    )
+    # 7. Crea máscara: píxeles dentro de cajas = 1, fuera = 0
+    mask = np.zeros(img_np.shape[:2], dtype=np.uint8)
+    for x1, y1, x2, y2 in boxes:
+        cv2.rectangle(mask, (x1, y1), (x2, y2), 1, thickness=-1)
 
-    # 8. Anotación de cajas y etiquetas
-    box_annotator   = sv.BoxAnnotator()
-    label_annotator = sv.LabelAnnotator()
+    # 8. Aplica máscara: fuera de cajas → negro
+    masked_np = np.where(mask[..., None] == 1, img_np, 0).astype(np.uint8)
+    pil_masked = Image.fromarray(masked_np)
+
+    # 9. Prepara anotaciones con supervision
+    detections = sv.Detections(xyxy=boxes,
+                               confidence=confidences,
+                               class_id=class_ids)
     labels = [
         f"{CLASS_NAMES[cid]} {conf:.2f}"
         for cid, conf in zip(class_ids, confidences)
     ]
 
-    out = box_annotator.annotate(scene=img.copy(), detections=detections)
-    out = label_annotator.annotate(scene=out, detections=detections, labels=labels)
+    box_annot   = sv.BoxAnnotator()
+    label_annot = sv.LabelAnnotator()
 
-    # 9. Devuelve JPEG
+    out = box_annot.annotate(scene=pil_masked.copy(), detections=detections)
+    out = label_annot.annotate(scene=out, detections=detections, labels=labels)
+
+    # 10. Devuelve la imagen JPEG resultante
     buf = io.BytesIO()
     out.save(buf, format="JPEG")
     buf.seek(0)
