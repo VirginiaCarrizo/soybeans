@@ -42,49 +42,59 @@ async def predict(file: UploadFile = File(...)):
     data = await file.read()
     pil = Image.open(io.BytesIO(data)).convert("RGB")
     img_np = np.array(pil)
+    H, W = img_np.shape[:2]
 
-    # 2) Inferencia de detección
+    # 2) Detecta con YOLO
     results = model(img_np, conf=0.5)[0]
-    boxes = results.boxes.xyxy.cpu().numpy().astype(int)   # Nx4
+    boxes       = results.boxes.xyxy.cpu().numpy().astype(int)  # Nx4
     confidences = results.boxes.conf.cpu().numpy()
     class_ids   = results.boxes.cls.cpu().numpy().astype(int)
 
-    # 3) Máscara global: fuera de cajas → negro
-    mask_boxes = np.zeros(img_np.shape[:2], dtype=np.uint8)
+    # 3) Máscara global para negro fuera de cajas
+    mask_boxes = np.zeros((H, W), dtype=np.uint8)
     for x1, y1, x2, y2 in boxes:
         cv2.rectangle(mask_boxes, (x1, y1), (x2, y2), 1, thickness=-1)
     img_masked = np.where(mask_boxes[..., None] == 1, img_np, 0).astype(np.uint8)
 
-    # 4) Para cada caja, segmenta la semilla dentro y la recorta
-    #    Construimos una imagen final donde cada ROI contiene solo la semilla
+    # 4) Segmenta cada semilla con padding
     final = np.zeros_like(img_masked)
+    pad = 10  # píxeles de margen extra
     for (x1, y1, x2, y2) in boxes:
-        roi = img_masked[y1:y2, x1:x2]
+        # aplica padding y recorta dentro de la imagen
+        x1p = max(x1 - pad, 0)
+        y1p = max(y1 - pad, 0)
+        x2p = min(x2 + pad, W)
+        y2p = min(y2 + pad, H)
+
+        roi = img_masked[y1p:y2p, x1p:x2p]
         if roi.size == 0:
             continue
 
-        # Gris + Otsu
+        # conviértelo a gris y binariza
         gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
         _, bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-        # Encuentra contornos y elige el mayor
+        # busca el contorno más grande (la semilla)
         cnts, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not cnts:
             continue
         cnt = max(cnts, key=cv2.contourArea)
 
-        # Crea máscara de la semilla en este ROI
+        # máscara de la semilla en ROI padded
         seed_mask = np.zeros_like(gray)
         cv2.drawContours(seed_mask, [cnt], -1, 255, thickness=-1)
 
-        # Aplica esa máscara al ROI original (mantiene color, fuera semilla → negro)
+        # aplica la máscara al ROI color
         seed_color = cv2.bitwise_and(roi, roi, mask=seed_mask)
-        final[y1:y2, x1:x2] = seed_color
 
-    # 5) Convierte a PIL para anotación
+        # coloca solo la región original sin padding de vuelta en final
+        # recortamos seed_color al tamaño original de la caja:
+        cx1, cy1 = x1 - x1p, y1 - y1p   # offset dentro del padded ROI
+        cx2, cy2 = cx1 + (x2 - x1), cy1 + (y2 - y1)
+        final[y1:y2, x1:x2] = seed_color[cy1:cy2, cx1:cx2]
+
+    # 5) Prepara anotaciones
     pil_final = Image.fromarray(final)
-
-    # 6) Prepara detections y etiquetas (sin área por ahora)
     detections = sv.Detections(xyxy=boxes,
                                confidence=confidences,
                                class_id=class_ids)
@@ -93,13 +103,13 @@ async def predict(file: UploadFile = File(...)):
         for cid, conf in zip(class_ids, confidences)
     ]
 
-    # 7) Anota sobre la imagen donde solo aparecen las semillas
+    # 6) Dibuja cajas y etiquetas
     out = sv.BoxAnnotator().annotate(scene=pil_final.copy(), detections=detections)
     out = sv.LabelAnnotator().annotate(scene=out,
                                        detections=detections,
                                        labels=labels)
 
-    # 8) Devuelve JPEG
+    # 7) Devuelve JPEG
     buf = io.BytesIO()
     out.save(buf, format="JPEG")
     buf.seek(0)
