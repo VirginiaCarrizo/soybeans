@@ -1,5 +1,3 @@
-export const video      = document.getElementById('video');
-export const canvas     = document.getElementById('canvas');
-export const boton      = document.getElementById('botonAccion');
-export const ctx        = canvas.getContext('2d');
-export const TARGET_SIZE = 640;
+export const canvas = document.getElementById('canvas');
+export const ctx    = canvas.getContext('2d');
+export const TARGET_SIZE = 416; // o el que prefieras, pero puedes ignorarlo si quieres usar el tamaño nativo
