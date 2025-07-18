@@ -118,6 +118,6 @@ async def predict(file: UploadFile = File(...)):
 
     # 8) Devuelve JPEG
     buf = io.BytesIO()
-    pil_final.copy().save(buf, format="JPEG")
+    out.save(buf, format="JPEG")
     buf.seek(0)
     return StreamingResponse(buf, media_type="image/jpeg")
