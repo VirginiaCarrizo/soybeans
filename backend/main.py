@@ -58,7 +58,7 @@ async def predict(file: UploadFile = File(...)):
 
     # 4) Segmenta cada semilla con padding + hull + morfología
     final = np.zeros_like(img_masked)
-    pad = 20  # píxeles de margen extra
+    pad = 5  # píxeles de margen extra
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
     for (x1, y1, x2, y2) in boxes:
         # aplica padding y recorta dentro de la imagen
