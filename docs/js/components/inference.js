@@ -11,11 +11,13 @@ function dataURLtoBlob(dataurl) {
   return new Blob([arr], { type: mime });
 }
 
-const API_BASE = 'http://localhost:8000'; // si sirves tu API local con FastAPI+Uvicorn en mismo host, deja ''. 
-                   // Si la sirves en otro host/puerto, pon 'http://192.168.x.x:8000'
+const API_BASE = 'http://localhost:8000';
 
 export async function inferirLocal(dataURL) {
   if (!dataURL) return;
+
+  const spinner = document.getElementById('spinner');
+  spinner.classList.remove('hidden');
 
   const blob = dataURLtoBlob(dataURL);
   const form = new FormData();
@@ -31,21 +33,23 @@ export async function inferirLocal(dataURL) {
     if (!res.ok) {
       const text = await res.text();
       console.error('Error de inferencia:', res.status, res.statusText, text);
+      spinner.classList.add('hidden');
       return;
     }
 
     const imgBlob = await res.blob();
     const img     = new Image();
     img.onload = () => {
-      // ajusta el canvas al tamaño natural de la imagen si quieres:
       canvas.width  = img.width;
       canvas.height = img.height;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0);
+      spinner.classList.add('hidden');
     };
     img.src = URL.createObjectURL(imgBlob);
 
   } catch (err) {
     console.error('Fetch failed:', err);
+    spinner.classList.add('hidden');
   }
 }

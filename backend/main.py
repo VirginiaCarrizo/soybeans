@@ -6,6 +6,10 @@ from PIL import Image
 import io
 import numpy as np
 
+#PARA CORRER LA APP NECESITO EN DOS TERMINALES DIFERENTES CORRER ESTAS DOS LINEAS:
+#python -m http.server 5500
+#uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
 # -- nuevo: import YOLO de ultralytics --
 from ultralytics import YOLO
 

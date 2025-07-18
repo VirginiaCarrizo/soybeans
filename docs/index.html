@@ -4,25 +4,23 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SoybeanSeed – Detección y Enumeración</title>
-  <!-- Apunta al CSS reorganizado -->
   <link rel="stylesheet" href="./css/style.css" />
-
 </head>
 <body>
   <h1>SoybeanSeed</h1>
 
-  <!-- Selector de archivo en lugar de cámara -->
+  <!-- Selector de archivo -->
   <input type="file" id="fileInput" accept="image/*" />
-
-  <!-- <video id="video" muted autoplay playsinline></video> -->
 
   <!-- Canvas donde pintamos la imagen y detecciones -->
   <canvas id="canvas"></canvas>
 
-  <!-- Botón procesar manual (opcional) -->
-  <!-- <div id="botonera">
-    <button id="botonAccion">Procesar</button>
-  </div> -->
+  <!-- Spinner de carga -->
+  <div id="spinner" class="hidden">
+    <div class="spinner-dot"></div>
+    <div class="spinner-dot"></div>
+    <div class="spinner-dot"></div>
+  </div>
 
   <script type="module" src="./js/main.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
