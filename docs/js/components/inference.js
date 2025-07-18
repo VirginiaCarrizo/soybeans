@@ -1,4 +1,4 @@
-import { canvas, ctx, TARGET_SIZE } from './dom.js';
+import { canvas, ctx } from './dom.js';
 
 function dataURLtoBlob(dataurl) {
   const [meta, b64] = dataurl.split(',');
@@ -11,14 +11,17 @@ function dataURLtoBlob(dataurl) {
   return new Blob([arr], { type: mime });
 }
 
+// Ajusta si tu API corre en otra máquina o puerto
 const API_BASE = 'http://localhost:8000';
 
 export async function inferirLocal(dataURL) {
   if (!dataURL) return;
 
+  // 1) Muestra el spinner
   const spinner = document.getElementById('spinner');
   spinner.classList.remove('hidden');
 
+  // 2) Prepara la petición
   const blob = dataURLtoBlob(dataURL);
   const form = new FormData();
   form.append('file', blob, 'input.jpg');
@@ -37,6 +40,7 @@ export async function inferirLocal(dataURL) {
       return;
     }
 
+    // 3) Procesa la respuesta y pinta en el canvas
     const imgBlob = await res.blob();
     const img     = new Image();
     img.onload = () => {
@@ -44,6 +48,7 @@ export async function inferirLocal(dataURL) {
       canvas.height = img.height;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0);
+      // 4) Oculta el spinner
       spinner.classList.add('hidden');
     };
     img.src = URL.createObjectURL(imgBlob);

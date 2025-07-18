@@ -10,7 +10,11 @@ h1 {
   margin-top: 20px;
 }
 
-video,
+input[type="file"] {
+  margin-top: 20px;
+}
+
+/* El canvas se ajusta a 400px de ancho máximo */
 canvas {
   width: 100%;
   max-width: 400px;
@@ -18,12 +22,12 @@ canvas {
   margin-top: 20px;
 }
 
-/* Spinner oculto por defecto */
+/* Oculta por defecto */
 .hidden {
   display: none;
 }
 
-/* Contenedor del spinner */
+/* Overlay del spinner */
 #spinner {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -50,22 +54,4 @@ canvas {
 @keyframes bounce {
   from { transform: translateY(0); }
   to   { transform: translateY(-12px); }
-}
-
-/* Si más adelante tienes botones */
-#botonAccion,
-#btnExaminar {
-  padding: 10px 20px;
-  font-size: 16px;
-  cursor: pointer;
-  border: 1px solid #444;
-  background-color: #eee;
-  border-radius: 4px;
-  z-index: 10;
-  touch-action: manipulation;
-}
-
-#botonAccion:hover,
-#btnExaminar:hover {
-  background-color: #ddd;
 }
