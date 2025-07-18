@@ -98,13 +98,16 @@ async def predict(file: UploadFile = File(...)):
         cx2, cy2 = cx1 + (x2 - x1), cy1 + (y2 - y1)
         final[y1:y2, x1:x2] = seed_color[cy1:cy2, cx1:cx2]
 
-    # 5) Dibuja PRIMERO los boxes sobre la imagen original para que queden abajo
+    scene_masked = Image.fromarray(img_masked)
     pil_boxes = sv.BoxAnnotator().annotate(
-        scene=pil.copy(),
+        scene=scene_masked.copy(),
         detections=sv.Detections(xyxy=boxes, confidence=confidences, class_id=class_ids)
     )
 
     # 6) Superpone las semillas segmentadas encima de esos boxes
+    boxes_np = np.array(pil_boxes)
+    mask_seed = final.any(axis=-1)[..., None]
+    composed = np.where(mask_seed, final, boxes_np)
     boxes_np = np.array(pil_boxes)
     mask_seed = final.any(axis=-1)[..., None]
     composed = np.where(mask_seed, final, boxes_np)
@@ -116,9 +119,3 @@ async def predict(file: UploadFile = File(...)):
         detections=sv.Detections(xyxy=boxes, confidence=confidences, class_id=class_ids),
         labels=labels
     )
-
-    # 8) Devuelve JPEG
-    buf = io.BytesIO()
-    out.save(buf, format="JPEG")
-    buf.seek(0)
-    return StreamingResponse(buf, media_type="image/jpeg")
