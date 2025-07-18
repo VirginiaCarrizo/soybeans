@@ -46,64 +46,73 @@ async def predict(file: UploadFile = File(...)):
 
     # 2) Detecta con YOLO
     results = model(img_np, conf=0.5)[0]
-    boxes       = results.boxes.xyxy.cpu().numpy().astype(int)
+    boxes = results.boxes.xyxy.cpu().numpy().astype(int)
     confidences = results.boxes.conf.cpu().numpy()
-    class_ids   = results.boxes.cls.cpu().numpy().astype(int)
+    class_ids = results.boxes.cls.cpu().numpy().astype(int)
 
-    # 3) Máscara global fuera de cajas
+    # 3) Máscara global: fuera de cajas → negro
     mask_boxes = np.zeros((H, W), dtype=np.uint8)
     for x1, y1, x2, y2 in boxes:
         cv2.rectangle(mask_boxes, (x1, y1), (x2, y2), 1, thickness=-1)
-    img_masked = np.where(mask_boxes[...,None]==1, img_np, 0).astype(np.uint8)
+    img_masked = np.where(mask_boxes[..., None] == 1, img_np, 0).astype(np.uint8)
 
     # 4) Segmenta cada semilla (padding + hull + morfología)
     final = np.zeros_like(img_masked)
-    pad = 1
+    pad = 20
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
     for (x1, y1, x2, y2) in boxes:
-        x1p, y1p = max(x1-pad,0), max(y1-pad,0)
-        x2p, y2p = min(x2+pad,W),   min(y2+pad,H)
+        x1p, y1p = max(x1-pad, 0), max(y1-pad, 0)
+        x2p, y2p = min(x2+pad, W), min(y2+pad, H)
         roi = img_masked[y1p:y2p, x1p:x2p]
-        if roi.size == 0: continue
+        if roi.size == 0:
+            continue
 
         gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
-        _, bw = cv2.threshold(gray, 0,255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        _, bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         cnts, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not cnts: continue
+        if not cnts:
+            continue
         hull = cv2.convexHull(max(cnts, key=cv2.contourArea))
 
         seed_mask = np.zeros_like(gray)
         cv2.drawContours(seed_mask, [hull], -1, 255, thickness=-1)
         seed_mask = cv2.morphologyEx(seed_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-        seed_mask = cv2.morphologyEx(seed_mask, cv2.MORPH_OPEN,  kernel, iterations=1)
+        seed_mask = cv2.morphologyEx(seed_mask, cv2.MORPH_OPEN, kernel, iterations=1)
 
         seed_color = cv2.bitwise_and(roi, roi, mask=seed_mask)
 
         # recorta sin padding
-        cx1, cy1 = x1-x1p, y1-y1p
-        cx2, cy2 = cx1 + (x2-x1), cy1 + (y2-y1)
+        cx1, cy1 = x1 - x1p, y1 - y1p
+        cx2, cy2 = cx1 + (x2 - x1), cy1 + (y2 - y1)
         final[y1:y2, x1:x2] = seed_color[cy1:cy2, cx1:cx2]
 
     # 5) Dibuja PRIMERO los boxes sobre la imagen original
-    pil_boxes = sv.BoxAnnotator().annotate(scene=pil.copy(),
-                                           detections=sv.Detections(xyxy=boxes,
-                                                                    confidence=confidences,
-                                                                    class_id=class_ids))
+    pil_boxes = sv.BoxAnnotator().annotate(
+        scene=pil.copy(),
+        detections=sv.Detections(
+            xyxy=boxes,
+            confidence=confidences,
+            class_id=class_ids
+        ))
 
     # 6) Superpone las semillas segmentadas encima de esos boxes
     boxes_np = np.array(pil_boxes)
-    composed = np.where(final[...,None]!=0, final, boxes_np)
+    mask_seed = final.any(axis=-1)[..., None]
+    composed = np.where(mask_seed, final, boxes_np)
 
-    # 7) Finalmente añade etiquetas (opcional)
-    labels = [f"{CLASS_NAMES[cid]} {conf:.2f}"
-              for cid, conf in zip(class_ids, confidences)]
-    out = sv.LabelAnnotator().annotate(scene=Image.fromarray(composed),
-                                       detections=sv.Detections(xyxy=boxes,
-                                                                confidence=confidences,
-                                                                class_id=class_ids),
-                                       labels=labels)
+    # 7) Finalmente añade etiquetas
+    labels = [f"{CLASS_NAMES[cid]} {conf:.2f}" for cid, conf in zip(class_ids, confidences)]
+    out = sv.LabelAnnotator().annotate(
+        scene=Image.fromarray(composed),
+        detections=sv.Detections(
+            xyxy=boxes,
+            confidence=confidences,
+            class_id=class_ids
+        ),
+        labels=labels
+    )
 
-    # 8) Retorna el JPEG
+    # 8) Devuelve JPEG
     buf = io.BytesIO()
     out.save(buf, format="JPEG")
     buf.seek(0)
