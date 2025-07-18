@@ -143,12 +143,12 @@ async def predict(file: UploadFile = File(...)):
         # alto: de (mid_x,gy1) a (mid_x,gy2)
         cv2.line(composed, (mid_x, gy1), (mid_x, gy2), (0,255,0), 2)
 
-    # 7) (opcional) añade etiquetas
-    # out = sv.LabelAnnotator().annotate(
-    #     scene=Image.fromarray(composed),
-    #     detections=dets,
-    #     labels=[f"{CLASS_NAMES[cid]} {conf:.2f}" for cid,conf in zip(class_ids,confidences)]
-    # )
+    #7) (opcional) añade etiquetas
+    out = sv.LabelAnnotator().annotate(
+        scene=Image.fromarray(composed),
+        detections=dets,
+        labels=[f"{CLASS_NAMES[cid]} {conf:.2f}" for cid,conf in zip(class_ids,confidences)]
+    )
 
     # 8) devuelve
     buf = io.BytesIO()
