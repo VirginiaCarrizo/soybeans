@@ -38,7 +38,7 @@ CLASS_NAMES = model.model.names  # dict {id: nombre}
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    # 1) Lee imagen
+    # 1) Lee la imagen
     data = await file.read()
     pil = Image.open(io.BytesIO(data)).convert("RGB")
     img_np = np.array(pil)
@@ -46,77 +46,64 @@ async def predict(file: UploadFile = File(...)):
 
     # 2) Detecta con YOLO
     results = model(img_np, conf=0.5)[0]
-    boxes       = results.boxes.xyxy.cpu().numpy().astype(int)  # Nx4
+    boxes       = results.boxes.xyxy.cpu().numpy().astype(int)
     confidences = results.boxes.conf.cpu().numpy()
     class_ids   = results.boxes.cls.cpu().numpy().astype(int)
 
-    # 3) Máscara global: fuera de cajas → negro
+    # 3) Máscara global fuera de cajas
     mask_boxes = np.zeros((H, W), dtype=np.uint8)
     for x1, y1, x2, y2 in boxes:
         cv2.rectangle(mask_boxes, (x1, y1), (x2, y2), 1, thickness=-1)
-    img_masked = np.where(mask_boxes[..., None] == 1, img_np, 0).astype(np.uint8)
+    img_masked = np.where(mask_boxes[...,None]==1, img_np, 0).astype(np.uint8)
 
-    # 4) Segmenta cada semilla con padding + hull + morfología
+    # 4) Segmenta cada semilla (padding + hull + morfología)
     final = np.zeros_like(img_masked)
-    pad = 1 # píxeles de margen extra
+    pad = 1
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
     for (x1, y1, x2, y2) in boxes:
-        # aplica padding y recorta dentro de la imagen
-        x1p = max(x1 - pad, 0)
-        y1p = max(y1 - pad, 0)
-        x2p = min(x2 + pad, W)
-        y2p = min(y2 + pad, H)
-
+        x1p, y1p = max(x1-pad,0), max(y1-pad,0)
+        x2p, y2p = min(x2+pad,W),   min(y2+pad,H)
         roi = img_masked[y1p:y2p, x1p:x2p]
-        if roi.size == 0:
-            continue
+        if roi.size == 0: continue
 
-        # convierte a gris y binariza
         gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
-        _, bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-        # encuentra el contorno más grande
+        _, bw = cv2.threshold(gray, 0,255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
         cnts, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not cnts:
-            continue
-        cnt = max(cnts, key=cv2.contourArea)
+        if not cnts: continue
+        hull = cv2.convexHull(max(cnts, key=cv2.contourArea))
 
-        # calcula el convex hull
-        hull = cv2.convexHull(cnt)
         seed_mask = np.zeros_like(gray)
         cv2.drawContours(seed_mask, [hull], -1, 255, thickness=-1)
-
-        # morfología: cierra huecos y elimina ruido
         seed_mask = cv2.morphologyEx(seed_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
         seed_mask = cv2.morphologyEx(seed_mask, cv2.MORPH_OPEN,  kernel, iterations=1)
 
-        # aplica la máscara al ROI en color
         seed_color = cv2.bitwise_and(roi, roi, mask=seed_mask)
 
-        # recorta seed_color al tamaño original de la caja y lo coloca en final
-        cx1, cy1 = x1 - x1p, y1 - y1p   # offset dentro del ROI padded
-        cx2, cy2 = cx1 + (x2 - x1), cy1 + (y2 - y1)
+        # recorta sin padding
+        cx1, cy1 = x1-x1p, y1-y1p
+        cx2, cy2 = cx1 + (x2-x1), cy1 + (y2-y1)
         final[y1:y2, x1:x2] = seed_color[cy1:cy2, cx1:cx2]
 
-    # 5) Convierte a PIL para anotar
-    pil_final = Image.fromarray(final)
+    # 5) Dibuja PRIMERO los boxes sobre la imagen original
+    pil_boxes = sv.BoxAnnotator().annotate(scene=pil.copy(),
+                                           detections=sv.Detections(xyxy=boxes,
+                                                                    confidence=confidences,
+                                                                    class_id=class_ids))
 
-    # 6) Prepara detections y etiquetas
-    detections = sv.Detections(
-        xyxy       = boxes,
-        confidence = confidences,
-        class_id   = class_ids
-    )
-    labels = [
-        f"{CLASS_NAMES[cid]} {conf:.2f}"
-        for cid, conf in zip(class_ids, confidences)
-    ]
+    # 6) Superpone las semillas segmentadas encima de esos boxes
+    boxes_np = np.array(pil_boxes)
+    composed = np.where(final[...,None]!=0, final, boxes_np)
 
-    # 7) Dibuja cajas y etiquetas sobre la imagen segmentada
-    out = sv.BoxAnnotator().annotate(scene=pil_final.copy(), detections=detections)
-    # out = sv.LabelAnnotator().annotate(scene=out, detections=detections, labels=labels)
+    # 7) Finalmente añade etiquetas (opcional)
+    labels = [f"{CLASS_NAMES[cid]} {conf:.2f}"
+              for cid, conf in zip(class_ids, confidences)]
+    out = sv.LabelAnnotator().annotate(scene=Image.fromarray(composed),
+                                       detections=sv.Detections(xyxy=boxes,
+                                                                confidence=confidences,
+                                                                class_id=class_ids),
+                                       labels=labels)
 
-    # 8) Devuelve JPEG
+    # 8) Retorna el JPEG
     buf = io.BytesIO()
     out.save(buf, format="JPEG")
     buf.seek(0)
