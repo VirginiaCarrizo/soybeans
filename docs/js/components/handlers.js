@@ -6,8 +6,6 @@ fileInput.addEventListener('change', e => {
   if (!file) return;
 
   const reader = new FileReader();
-  reader.onload = () => {
-    inferirLocal(reader.result);
-  };
+  reader.onload = () => inferirLocal(reader.result);
   reader.readAsDataURL(file);
 });

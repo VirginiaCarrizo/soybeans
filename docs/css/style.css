@@ -14,7 +14,6 @@ input[type="file"] {
   margin-top: 20px;
 }
 
-/* El canvas se ajusta a 400px de ancho máximo */
 canvas {
   width: 100%;
   max-width: 400px;
@@ -22,20 +21,24 @@ canvas {
   margin-top: 20px;
 }
 
-/* Oculta por defecto */
-.hidden {
-  display: none;
-}
-
-/* Overlay del spinner */
+/* Spinner: base sin display (block por defecto), luego lo controlamos */
 #spinner {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  display: flex;
   justify-content: center;
   align-items: center;
   background: rgba(255,255,255,0.7);
   z-index: 100;
+}
+
+/* Oculta spinner cuando tenga la clase .hidden */
+#spinner.hidden {
+  display: none;
+}
+
+/* Muestra spinner cuando NO tenga la clase .hidden */
+#spinner:not(.hidden) {
+  display: flex;
 }
 
 /* Puntos animados */
@@ -47,7 +50,6 @@ canvas {
   background: #444;
   animation: bounce 0.6s infinite alternate;
 }
-
 .spinner-dot:nth-child(2) { animation-delay: 0.2s; }
 .spinner-dot:nth-child(3) { animation-delay: 0.4s; }
 
