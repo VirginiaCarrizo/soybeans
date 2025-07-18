@@ -50,15 +50,16 @@ async def predict(file: UploadFile = File(...)):
     confidences = results.boxes.conf.cpu().numpy()
     class_ids   = results.boxes.cls.cpu().numpy().astype(int)
 
-    # 3) Máscara global para negro fuera de cajas
+    # 3) Máscara global: fuera de cajas → negro
     mask_boxes = np.zeros((H, W), dtype=np.uint8)
     for x1, y1, x2, y2 in boxes:
         cv2.rectangle(mask_boxes, (x1, y1), (x2, y2), 1, thickness=-1)
     img_masked = np.where(mask_boxes[..., None] == 1, img_np, 0).astype(np.uint8)
 
-    # 4) Segmenta cada semilla con padding
+    # 4) Segmenta cada semilla con padding + hull + morfología
     final = np.zeros_like(img_masked)
     pad = 20  # píxeles de margen extra
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
     for (x1, y1, x2, y2) in boxes:
         # aplica padding y recorta dentro de la imagen
         x1p = max(x1 - pad, 0)
@@ -70,46 +71,52 @@ async def predict(file: UploadFile = File(...)):
         if roi.size == 0:
             continue
 
-        # conviértelo a gris y binariza
+        # convierte a gris y binariza
         gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
         _, bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-        # busca el contorno más grande (la semilla)
+        # encuentra el contorno más grande
         cnts, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not cnts:
             continue
         cnt = max(cnts, key=cv2.contourArea)
 
-        # máscara de la semilla en ROI padded
+        # calcula el convex hull
+        hull = cv2.convexHull(cnt)
         seed_mask = np.zeros_like(gray)
-        cv2.drawContours(seed_mask, [cnt], -1, 255, thickness=-1)
+        cv2.drawContours(seed_mask, [hull], -1, 255, thickness=-1)
 
-        # aplica la máscara al ROI color
+        # morfología: cierra huecos y elimina ruido
+        seed_mask = cv2.morphologyEx(seed_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+        seed_mask = cv2.morphologyEx(seed_mask, cv2.MORPH_OPEN,  kernel, iterations=1)
+
+        # aplica la máscara al ROI en color
         seed_color = cv2.bitwise_and(roi, roi, mask=seed_mask)
 
-        # coloca solo la región original sin padding de vuelta en final
-        # recortamos seed_color al tamaño original de la caja:
-        cx1, cy1 = x1 - x1p, y1 - y1p   # offset dentro del padded ROI
+        # recorta seed_color al tamaño original de la caja y lo coloca en final
+        cx1, cy1 = x1 - x1p, y1 - y1p   # offset dentro del ROI padded
         cx2, cy2 = cx1 + (x2 - x1), cy1 + (y2 - y1)
         final[y1:y2, x1:x2] = seed_color[cy1:cy2, cx1:cx2]
 
-    # 5) Prepara anotaciones
+    # 5) Convierte a PIL para anotar
     pil_final = Image.fromarray(final)
-    detections = sv.Detections(xyxy=boxes,
-                               confidence=confidences,
-                               class_id=class_ids)
+
+    # 6) Prepara detections y etiquetas
+    detections = sv.Detections(
+        xyxy       = boxes,
+        confidence = confidences,
+        class_id   = class_ids
+    )
     labels = [
         f"{CLASS_NAMES[cid]} {conf:.2f}"
         for cid, conf in zip(class_ids, confidences)
     ]
 
-    # 6) Dibuja cajas y etiquetas
+    # 7) Dibuja cajas y etiquetas sobre la imagen segmentada
     out = sv.BoxAnnotator().annotate(scene=pil_final.copy(), detections=detections)
-    out = sv.LabelAnnotator().annotate(scene=out,
-                                       detections=detections,
-                                       labels=labels)
+    out = sv.LabelAnnotator().annotate(scene=out, detections=detections, labels=labels)
 
-    # 7) Devuelve JPEG
+    # 8) Devuelve JPEG
     buf = io.BytesIO()
     out.save(buf, format="JPEG")
     buf.seek(0)
