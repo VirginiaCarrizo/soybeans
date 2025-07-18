@@ -113,7 +113,7 @@ async def predict(file: UploadFile = File(...)):
     ]
 
     # 7) Dibuja cajas y etiquetas sobre la imagen segmentada
-    # out = sv.BoxAnnotator().annotate(scene=pil_final.copy(), detections=detections)
+    out = sv.BoxAnnotator().annotate(scene=pil_final.copy(), detections=detections)
     # out = sv.LabelAnnotator().annotate(scene=out, detections=detections, labels=labels)
 
     # 8) Devuelve JPEG
