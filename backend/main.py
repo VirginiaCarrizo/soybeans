@@ -37,19 +37,19 @@ CLASS_NAMES = model.model.names  # dict {id: nombre}
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    # 1) Leer imagen
+    # 1) Leer la imagen
     data   = await file.read()
     pil    = Image.open(io.BytesIO(data)).convert("RGB")
     img_np = np.array(pil)
     H, W   = img_np.shape[:2]
 
-    # 2) Detectar con YOLO
+    # 2) Detectar con YOLOv8
     results     = model(img_np, conf=0.5)[0]
-    boxes       = results.boxes.xyxy.cpu().numpy().astype(int)
+    boxes       = results.boxes.xyxy.cpu().numpy().astype(int)  # Nx4
     confidences = results.boxes.conf.cpu().numpy()
     class_ids   = results.boxes.cls.cpu().numpy().astype(int)
 
-    # 3) Fondo negro + dibujar boxes
+    # 3) Crear fondo negro y dibujar bounding boxes
     black      = np.zeros_like(img_np)
     detections = sv.Detections(xyxy=boxes, confidence=confidences, class_id=class_ids)
     pil_boxes  = sv.BoxAnnotator().annotate(scene=Image.fromarray(black), detections=detections)
@@ -59,18 +59,18 @@ async def predict(file: UploadFile = File(...)):
     pad    = 5
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
 
-    # 5) Por cada caja: segmentar, pegar y medir usando fitEllipse
+    # 5) Para cada caja: segmentar semilla, pegar y medir diámetro máximo
     for (x1, y1, x2, y2) in boxes:
-        # 5.1) ROI padded
+        # 5.1) ROI con padding
         x1p, y1p = max(x1 - pad, 0), max(y1 - pad, 0)
         x2p, y2p = min(x2 + pad, W),   min(y2 + pad, H)
         roi       = img_np[y1p:y2p, x1p:x2p]
         if roi.size == 0:
             continue
 
-        # 5.2) Enmascarar fuera de box
+        # 5.2) Enmascarar fuera del box
         mask_box = np.zeros((H, W), dtype=np.uint8)
-        cv2.rectangle(mask_box, (x1, y1), (x2, y2), 1, -1)
+        cv2.rectangle(mask_box, (x1, y1), (x2, y2), 1, thickness=-1)
         roi_masked = cv2.bitwise_and(
             roi,
             roi,
@@ -84,59 +84,59 @@ async def predict(file: UploadFile = File(...)):
         if not cnts:
             continue
         cnt = max(cnts, key=cv2.contourArea)
-        if cnt.shape[0] < 5:
-            # fitEllipse requiere al menos 5 puntos
-            continue
 
-        # 5.4) Refina máscara con hull y morfología
+        # 5.4) Convex hull + morfología para refinar la máscara
         hull = cv2.convexHull(cnt)
         seed_mask = np.zeros_like(gray)
         cv2.drawContours(seed_mask, [hull], -1, 255, thickness=-1)
         seed_mask = cv2.morphologyEx(seed_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
         seed_mask = cv2.morphologyEx(seed_mask, cv2.MORPH_OPEN,  kernel, iterations=1)
 
-        # 5.5) Aplica máscara para color
+        # 5.5) Aplica la máscara refinada al ROI en color
         seed_color = cv2.bitwise_and(roi_masked, roi_masked, mask=seed_mask)
 
-        # 5.6) Pega la semilla segmentada sobre composed
+        # 5.6) Pega la semilla segmentada en 'composed'
         cx1, cy1 = x1 - x1p, y1 - y1p
         cx2, cy2 = cx1 + (x2 - x1), cy1 + (y2 - y1)
         composed[y1:y2, x1:x2] = seed_color[cy1:cy2, cx1:cx2]
 
-        # 5.7) Ajustar coordenadas del contorno al sistema global
+        # 5.7) Llevar contorno a coordenadas globales y hull global
         cnt_global = cnt + np.array([[x1p, y1p]])
-
-        # 5.8) Ajustar convex hull global para medición
         hull_global = cv2.convexHull(cnt_global)
 
-        # 5.9) Ajusta unipse mínimo (rotated ellipse) al hull
-        ellipse = cv2.fitEllipse(hull_global)
-        (cx, cy), (MA, ma), angle = ellipse  # MA=major axis, ma=minor axis
+        # 5.8) Extraer puntos del hull
+        pts = hull_global.reshape(-1, 2)
 
-        # 5.10) Calcula puntos finales de la mayor longitud (largo)
-        theta = np.deg2rad(angle)
-        dx = np.cos(theta) * MA/2
-        dy = np.sin(theta) * MA/2
-        p1 = (int(cx - dx), int(cy - dy))
-        p2 = (int(cx + dx), int(cy + dy))
-        cv2.line(composed, p1, p2, (0,255,0), 2)  # largo
+        # 5.9) Encontrar el par de puntos con distancia máxima (diámetro)
+        max_d = 0
+        p1 = p2 = pts[0]
+        for i in range(len(pts)):
+            for j in range(i + 1, len(pts)):
+                d = np.linalg.norm(pts[i] - pts[j])
+                if d > max_d:
+                    max_d = d
+                    p1, p2 = tuple(pts[i]), tuple(pts[j])
 
-        # 5.11) Calcula puntos finales del eje perpendicular (ancho)
-        theta_p = theta + np.pi/2
-        dx2 = np.cos(theta_p) * ma/2
-        dy2 = np.sin(theta_p) * ma/2
-        q1 = (int(cx - dx2), int(cy - dy2))
-        q2 = (int(cx + dx2), int(cy + dy2))
-        cv2.line(composed, q1, q2, (255,0,0), 2)  # ancho (azul)
+        # 5.10) Dibujar la línea del largo (verde)
+        cv2.line(composed, p1, p2, (0,255,0), 2)
 
-    # 6) (Opcional) Etiquetas
+        # 5.11) Calcular y dibujar el ancho (azul), eje perpendicular
+        v = np.array(p2) - np.array(p1)
+        v = v / np.linalg.norm(v)
+        perp = np.array([-v[1], v[0]])
+        projs = pts.dot(perp)
+        idx_min, idx_max = np.argmin(projs), np.argmax(projs)
+        q1, q2 = tuple(pts[idx_min]), tuple(pts[idx_max])
+        cv2.line(composed, q1, q2, (255,0,0), 2)
+
+    # 6) (Opcional) Añadir etiquetas
     out = sv.LabelAnnotator().annotate(
         scene=Image.fromarray(composed),
         detections=detections,
         labels=[f"{CLASS_NAMES[cid]} {conf:.2f}" for cid, conf in zip(class_ids, confidences)]
     )
 
-    # 7) Retornar como JPEG
+    # 7) Devolver el resultado como JPEG
     buf = io.BytesIO()
     out.save(buf, format="JPEG")
     buf.seek(0)
