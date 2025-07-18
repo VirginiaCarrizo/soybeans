@@ -130,14 +130,14 @@ async def predict(file: UploadFile = File(...)):
         cv2.line(composed, q1, q2, (255,0,0), 2)
 
     # 6) (Opcional) Añadir etiquetas
-    out = sv.LabelAnnotator().annotate(
-        scene=Image.fromarray(composed),
-        detections=detections,
-        labels=[f"{CLASS_NAMES[cid]} {conf:.2f}" for cid, conf in zip(class_ids, confidences)]
-    )
+    # out = sv.LabelAnnotator().annotate(
+    #     scene=Image.fromarray(composed),
+    #     detections=detections,
+    #     labels=[f"{CLASS_NAMES[cid]} {conf:.2f}" for cid, conf in zip(class_ids, confidences)]
+    # )
 
     # 7) Devolver el resultado como JPEG
     buf = io.BytesIO()
-    out.save(buf, format="JPEG")
+    composed.save(buf, format="JPEG")
     buf.seek(0)
     return StreamingResponse(buf, media_type="image/jpeg")
