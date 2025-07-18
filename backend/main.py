@@ -58,7 +58,7 @@ async def predict(file: UploadFile = File(...)):
 
     # 4) Segmenta cada semilla con padding
     final = np.zeros_like(img_masked)
-    pad = 35  # píxeles de margen extra
+    pad = 15  # píxeles de margen extra
     for (x1, y1, x2, y2) in boxes:
         # aplica padding y recorta dentro de la imagen
         x1p = max(x1 - pad, 0)
